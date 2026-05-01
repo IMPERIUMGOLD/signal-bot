@@ -12,7 +12,7 @@ VIP_CHANNEL = -1003774299026
 PUBLIC_CHANNEL = "@imperiumgoldmars"
 
 FOLLOW_LINK = "http://t.me/imperiumgoldmars/16"
-WEBHOOK_URL = "https://signal-bot-v737.onrender.com"
+WEBHOOK_URL = "https://signal-bot-luyh.onrender.com"
 
 GIF_FILE = "gif_ids.json"
 

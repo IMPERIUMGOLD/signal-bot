@@ -1,0 +1,268 @@
+import re
+import json
+import os
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+BOT_TOKEN = "8671810673:AAHfXr7JIkYq_7qzF5bfS9AMwWVfL30zyD0"
+OWNER_ID = 5085494476
+
+VIP_CHANNEL = -1003774299026
+PUBLIC_CHANNEL = "@imperiumgoldmars"
+
+FOLLOW_LINK = "http://t.me/imperiumgoldmars/16"
+GIF_FILE = "gif_ids.json"
+
+bot = telebot.TeleBot(BOT_TOKEN)
+pending = {}
+
+
+def load_gifs():
+    if os.path.exists(GIF_FILE):
+        with open(GIF_FILE, "r") as f:
+            return json.load(f)
+    return {"buy": None, "sell": None}
+
+
+def save_gifs(data):
+    with open(GIF_FILE, "w") as f:
+        json.dump(data, f)
+
+
+gif_ids = load_gifs()
+
+
+def parse_signal(text):
+    pattern = r"^(B|S)\s+(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sl\s+(\d+(?:\.\d+)?)\s+p2\s+(\d+(?:\.\d+)?)$"
+    m = re.match(pattern, text.strip(), re.IGNORECASE)
+
+    if not m:
+        return None
+
+    direction, e1, e2, sl, p2 = m.groups()
+
+    return {
+        "direction": "BUY" if direction.upper() == "B" else "SELL",
+        "entry": f"{e1} - {e2}",
+        "sl": sl,
+        "p2": p2
+    }
+
+
+def build_caption(signal):
+    return f"""<b>GOLD {signal['direction']} NOW 🔥</b>
+
+Entry Zone : {signal['entry']}
+
+TP 1 : AS YOU LIKE 🫵🏻
+TP 2 : {signal['p2']}
+
+🚫 Stop Loss : {signal['sl']}  (Candle Close)
+
+Way to Follow Signal : <a href="{FOLLOW_LINK}">Click</a> ‼️
+
+DISCLAIMER ⚠️
+Signals are shared for reference only. This is general information, not financial advice. Please decide independently."""
+
+
+def send_signal(target, signal):
+    gif_id = gif_ids["buy"] if signal["direction"] == "BUY" else gif_ids["sell"]
+
+    if not gif_id:
+        bot.send_message(OWNER_ID, f"❌ {signal['direction']} GIF 还没设置")
+        return False
+
+    bot.send_animation(
+        target,
+        gif_id,
+        caption=build_caption(signal),
+        parse_mode="HTML"
+    )
+    return True
+
+
+def make_keyboard(sent_count):
+    markup = InlineKeyboardMarkup()
+
+    if sent_count == 0:
+        markup.row(
+            InlineKeyboardButton("🔓 Public", callback_data="public"),
+            InlineKeyboardButton("💎 VIP", callback_data="vip")
+        )
+        markup.row(
+            InlineKeyboardButton("🌍 Both", callback_data="both")
+        )
+    elif sent_count == 1:
+        markup.row(
+            InlineKeyboardButton("🔓 Public", callback_data="public"),
+            InlineKeyboardButton("💎 VIP", callback_data="vip")
+        )
+        markup.row(
+            InlineKeyboardButton("🌍 Both", callback_data="both"),
+            InlineKeyboardButton("✅ Done", callback_data="done")
+        )
+    else:
+        markup.row(
+            InlineKeyboardButton("✅ Done", callback_data="done")
+        )
+
+    return markup
+
+
+@bot.message_handler(commands=["start"])
+def start(message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "Signal Bot 已启动。\n\n格式：\nB 3000 - 2995 sl 2990 p2 3015\nS 4603 - 4608 sl 4610 p2 4553"
+    )
+
+
+@bot.message_handler(commands=["setbuygif"])
+def set_buy_gif(message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    pending[message.chat.id] = {"mode": "set_buy"}
+    bot.send_message(message.chat.id, "现在发送 Buy GIF 给我。")
+
+
+@bot.message_handler(commands=["setsellgif"])
+def set_sell_gif(message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    pending[message.chat.id] = {"mode": "set_sell"}
+    bot.send_message(message.chat.id, "现在发送 Sell GIF 给我。")
+
+
+@bot.message_handler(content_types=["animation", "video", "document"])
+def receive_gif(message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    state = pending.get(message.chat.id)
+
+    if not state:
+        bot.send_message(message.chat.id, "请先输入 /setbuygif 或 /setsellgif")
+        return
+
+    file_id = None
+
+    if message.animation:
+        file_id = message.animation.file_id
+    elif message.video:
+        file_id = message.video.file_id
+    elif message.document:
+        file_id = message.document.file_id
+
+    if state["mode"] == "set_buy":
+        gif_ids["buy"] = file_id
+        save_gifs(gif_ids)
+        bot.send_message(message.chat.id, "✅ Buy GIF 已保存")
+
+    elif state["mode"] == "set_sell":
+        gif_ids["sell"] = file_id
+        save_gifs(gif_ids)
+        bot.send_message(message.chat.id, "✅ Sell GIF 已保存")
+
+    pending.pop(message.chat.id, None)
+
+
+@bot.message_handler(func=lambda message: True)
+def handle_signal(message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    signal = parse_signal(message.text)
+
+    if not signal:
+        bot.send_message(
+            message.chat.id,
+            "格式错误。\n\n正确格式：\nS 4603 - 4608 sl 4610 p2 4553"
+        )
+        return
+
+    pending[message.chat.id] = {
+        "mode": "send",
+        "signal": signal,
+        "sent_count": 0
+    }
+
+    bot.send_message(
+        message.chat.id,
+        "信号已生成，请选择发送范围：\n\n" + build_caption(signal),
+        reply_markup=make_keyboard(0),
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    if call.from_user.id != OWNER_ID:
+        return
+
+    state = pending.get(call.message.chat.id)
+
+    if not state or state.get("mode") != "send":
+        bot.answer_callback_query(call.id, "这条信号已结束，请重新输入信号")
+        return
+
+    signal = state["signal"]
+    sent_count = state["sent_count"]
+
+    if call.data == "done":
+        pending.pop(call.message.chat.id, None)
+        bot.edit_message_reply_markup(
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=None
+        )
+        bot.send_message(call.message.chat.id, "✅ 已完成。这条信号已结束。")
+        return
+
+    if sent_count >= 2:
+        bot.send_message(call.message.chat.id, "⚠️ 已达到最多选择次数，请点击 Done。")
+        return
+
+    try:
+        if call.data == "public":
+            send_signal(PUBLIC_CHANNEL, signal)
+            result_text = "已发送到 Public ✅"
+
+        elif call.data == "vip":
+            send_signal(VIP_CHANNEL, signal)
+            result_text = "已发送到 VIP ✅"
+
+        elif call.data == "both":
+            send_signal(PUBLIC_CHANNEL, signal)
+            send_signal(VIP_CHANNEL, signal)
+            result_text = "已发送到 Public + VIP ✅"
+
+        else:
+            return
+
+        state["sent_count"] += 1
+
+        if state["sent_count"] >= 2:
+            reply_markup = make_keyboard(2)
+            next_text = result_text + "\n\n已达到最多选择次数，请点击 Done。"
+        else:
+            reply_markup = make_keyboard(1)
+            next_text = result_text + "\n\n是否还要发送到其他地方？"
+
+        bot.send_message(
+            call.message.chat.id,
+            next_text,
+            reply_markup=reply_markup
+        )
+
+    except Exception as e:
+        bot.send_message(call.message.chat.id, f"❌ 发送失败：{e}")
+
+
+print("Signal Bot is running...")
+bot.infinity_polling()

@@ -2,6 +2,7 @@ import re
 import json
 import os
 import telebot
+from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 BOT_TOKEN = "8671810673:AAHfXr7JIkYq_7qzF5bfS9AMwWVfL30zyD0"
@@ -11,9 +12,12 @@ VIP_CHANNEL = -1003774299026
 PUBLIC_CHANNEL = "@imperiumgoldmars"
 
 FOLLOW_LINK = "http://t.me/imperiumgoldmars/16"
+WEBHOOK_URL = "https://signal-bot-v737.onrender.com"
+
 GIF_FILE = "gif_ids.json"
 
 bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 pending = {}
 
 
@@ -35,7 +39,6 @@ gif_ids = load_gifs()
 def parse_signal(text):
     pattern = r"^(B|S)\s+(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sl\s+(\d+(?:\.\d+)?)\s+p2\s+(\d+(?:\.\d+)?)$"
     m = re.match(pattern, text.strip(), re.IGNORECASE)
-
     if not m:
         return None
 
@@ -248,21 +251,35 @@ def callback(call):
         state["sent_count"] += 1
 
         if state["sent_count"] >= 2:
-            reply_markup = make_keyboard(2)
-            next_text = result_text + "\n\n已达到最多选择次数，请点击 Done。"
+            bot.send_message(
+                call.message.chat.id,
+                result_text + "\n\n已达到最多选择次数，请点击 Done。",
+                reply_markup=make_keyboard(2)
+            )
         else:
-            reply_markup = make_keyboard(1)
-            next_text = result_text + "\n\n是否还要发送到其他地方？"
-
-        bot.send_message(
-            call.message.chat.id,
-            next_text,
-            reply_markup=reply_markup
-        )
+            bot.send_message(
+                call.message.chat.id,
+                result_text + "\n\n是否还要发送到其他地方？",
+                reply_markup=make_keyboard(1)
+            )
 
     except Exception as e:
         bot.send_message(call.message.chat.id, f"❌ 发送失败：{e}")
 
 
-print("Signal Bot is running...")
-bot.infinity_polling()
+@app.route("/", methods=["GET"])
+def home():
+    return "Signal Bot is running"
+
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
+    bot.process_new_updates([update])
+    return "OK", 200
+
+
+bot.remove_webhook()
+bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+
+print("Webhook Signal Bot is running")

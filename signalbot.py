@@ -5,7 +5,7 @@ import telebot
 from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = "8671810673:AAHfXr7JIkYq_7qzF5bfS9AMwWVfL30zyD0"
+BOT_TOKEN = "8671810673:AAGKTjNugTeqGHfSHdHQnYkzvqSFmx7ptHg"
 OWNER_ID = 5085494476
 
 VIP_CHANNEL = -1003774299026
@@ -15,7 +15,6 @@ FOLLOW_LINK = "http://t.me/imperiumgoldmars/16"
 WEBHOOK_URL = "https://signal-bot-luyh.onrender.com"
 
 # === 下线群配置 ===
-
 DOWNLINE_PUBLIC = [
     "@testingonlybotgtm",
     "@subtesting1",
@@ -52,6 +51,7 @@ gif_ids = load_gifs()
 def parse_signal(text):
     pattern = r"^(B|S)\s+(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sl\s+(\d+(?:\.\d+)?)\s+p2\s+(\d+(?:\.\d+)?)$"
     m = re.match(pattern, text.strip(), re.IGNORECASE)
+
     if not m:
         return None
 
@@ -85,8 +85,7 @@ def send_signal(target, signal):
     gif_id = gif_ids["buy"] if signal["direction"] == "BUY" else gif_ids["sell"]
 
     if not gif_id:
-        bot.send_message(OWNER_ID, f"❌ {signal['direction']} GIF 还没设置")
-        return False
+        raise Exception(f"{signal['direction']} GIF 还没设置")
 
     bot.send_animation(
         target,
@@ -94,7 +93,6 @@ def send_signal(target, signal):
         caption=build_caption(signal),
         parse_mode="HTML"
     )
-    return True
 
 
 def make_keyboard(sent_count):
@@ -108,6 +106,7 @@ def make_keyboard(sent_count):
         markup.row(
             InlineKeyboardButton("🌍 Both", callback_data="both")
         )
+
     elif sent_count == 1:
         markup.row(
             InlineKeyboardButton("🔓 Public", callback_data="public"),
@@ -117,6 +116,7 @@ def make_keyboard(sent_count):
             InlineKeyboardButton("🌍 Both", callback_data="both"),
             InlineKeyboardButton("✅ Done", callback_data="done")
         )
+
     else:
         markup.row(
             InlineKeyboardButton("✅ Done", callback_data="done")
@@ -132,7 +132,7 @@ def start(message):
 
     bot.send_message(
         message.chat.id,
-        "Signal Bot 已启动。\n\n格式：\nB 3000 - 2995 sl 2990 p2 3015\nS 4603 - 4608 sl 4610 p2 4553"
+        "Signal Bot 已启动。\n\n格式：\nB 3333 - 3331 sl 3299 p2 6000\nS 4603 - 4608 sl 4610 p2 4553"
     )
 
 
@@ -174,6 +174,10 @@ def receive_gif(message):
     elif message.document:
         file_id = message.document.file_id
 
+    if not file_id:
+        bot.send_message(message.chat.id, "❌ 没有读取到 GIF file_id")
+        return
+
     if state["mode"] == "set_buy":
         gif_ids["buy"] = file_id
         save_gifs(gif_ids)
@@ -197,7 +201,7 @@ def handle_signal(message):
     if not signal:
         bot.send_message(
             message.chat.id,
-            "格式错误。\n\n正确格式：\nS 4603 - 4608 sl 4610 p2 4553"
+            "格式错误。\n\n正确格式：\nB 3333 - 3331 sl 3299 p2 6000\nS 4603 - 4608 sl 4610 p2 4553"
         )
         return
 
@@ -251,37 +255,47 @@ def callback(call):
             for ch in DOWNLINE_PUBLIC:
                 try:
                     send_signal(ch, signal)
-                except:
-                    pass
+                except Exception as e:
+                    bot.send_message(call.message.chat.id, f"❌ 下线Public发送失败 {ch}: {e}")
 
             result_text = "已发送到 Public ✅"
 
         elif call.data == "vip":
-            send_signal(VIP_CHANNEL, signal)
+            try:
+                send_signal(VIP_CHANNEL, signal)
+            except Exception as e:
+                bot.send_message(call.message.chat.id, f"❌ 主VIP发送失败: {e}")
 
             for ch in DOWNLINE_VIP:
                 try:
                     send_signal(ch, signal)
-                except:
-                    pass
+                except Exception as e:
+                    bot.send_message(call.message.chat.id, f"❌ 下线VIP发送失败 {ch}: {e}")
 
             result_text = "已发送到 VIP ✅"
 
         elif call.data == "both":
-            send_signal(PUBLIC_CHANNEL, signal)
-            send_signal(VIP_CHANNEL, signal)
+            try:
+                send_signal(PUBLIC_CHANNEL, signal)
+            except Exception as e:
+                bot.send_message(call.message.chat.id, f"❌ 主Public发送失败: {e}")
+
+            try:
+                send_signal(VIP_CHANNEL, signal)
+            except Exception as e:
+                bot.send_message(call.message.chat.id, f"❌ 主VIP发送失败: {e}")
 
             for ch in DOWNLINE_PUBLIC:
                 try:
                     send_signal(ch, signal)
-                except:
-                    pass
+                except Exception as e:
+                    bot.send_message(call.message.chat.id, f"❌ 下线Public发送失败 {ch}: {e}")
 
             for ch in DOWNLINE_VIP:
                 try:
                     send_signal(ch, signal)
-                except:
-                    pass
+                except Exception as e:
+                    bot.send_message(call.message.chat.id, f"❌ 下线VIP发送失败 {ch}: {e}")
 
             result_text = "已发送到 Public + VIP ✅"
 

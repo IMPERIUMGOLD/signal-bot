@@ -55,14 +55,14 @@ def parse_signal(text):
 def build_caption(signal):
     return f"""<b>GOLD {signal['direction']} NOW 🔥</b>
 
-Entry Zone : {signal['entry']}
+Entry Zone : <b>{signal['entry']}</b>
 
 TP 1 : AS YOU LIKE 🫵🏻
-TP 2 : {signal['p2']}
+TP 2 : <b>{signal['p2']}</b>
 
 🚫 Stop Loss : {signal['sl']}  (Candle Close)
 
-Way to Follow Signal : <a href="{FOLLOW_LINK}">Click</a> ‼️
+Way to Follow Signal : <b><a href="{FOLLOW_LINK}">Click</a></b> ‼️
 
 DISCLAIMER ⚠️
 Signals are shared for reference only. This is general information, not financial advice. Please decide independently."""

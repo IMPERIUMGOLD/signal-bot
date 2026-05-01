@@ -247,15 +247,42 @@ def callback(call):
     try:
         if call.data == "public":
             send_signal(PUBLIC_CHANNEL, signal)
+
+            for ch in DOWNLINE_PUBLIC:
+                try:
+                    send_signal(ch, signal)
+                except:
+                    pass
+
             result_text = "已发送到 Public ✅"
 
         elif call.data == "vip":
             send_signal(VIP_CHANNEL, signal)
+
+            for ch in DOWNLINE_VIP:
+                try:
+                    send_signal(ch, signal)
+                except:
+                    pass
+
             result_text = "已发送到 VIP ✅"
 
         elif call.data == "both":
             send_signal(PUBLIC_CHANNEL, signal)
             send_signal(VIP_CHANNEL, signal)
+
+            for ch in DOWNLINE_PUBLIC:
+                try:
+                    send_signal(ch, signal)
+                except:
+                    pass
+
+            for ch in DOWNLINE_VIP:
+                try:
+                    send_signal(ch, signal)
+                except:
+                    pass
+
             result_text = "已发送到 Public + VIP ✅"
 
         else:

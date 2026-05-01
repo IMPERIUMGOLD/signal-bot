@@ -14,6 +14,19 @@ PUBLIC_CHANNEL = "@imperiumgoldmars"
 FOLLOW_LINK = "http://t.me/imperiumgoldmars/16"
 WEBHOOK_URL = "https://signal-bot-luyh.onrender.com"
 
+# === 下线群配置 ===
+
+DOWNLINE_PUBLIC = [
+    "@testingonlybotgtm",
+    "@subtesting1",
+    "@subtesting2"
+]
+
+DOWNLINE_VIP = [
+    -1003972391229,
+    -1003725353677
+]
+
 GIF_FILE = "gif_ids.json"
 
 bot = telebot.TeleBot(BOT_TOKEN)

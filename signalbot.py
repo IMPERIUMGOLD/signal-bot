@@ -114,16 +114,6 @@ def ayd_sub2():
     return "<b>Are You Ready Everyone!!</b>"
 
 
-def keyboard():
-    m = InlineKeyboardMarkup()
-    m.row(
-        InlineKeyboardButton("🔓 Public", callback_data="public"),
-        InlineKeyboardButton("💎 VIP", callback_data="vip")
-    )
-    m.row(InlineKeyboardButton("🌍 Both", callback_data="both"))
-    return m
-
-
 def get_gif_id(direction):
     if direction == "BUY":
         return gif_ids.get("buy") or DEFAULT_BUY_GIF_ID
@@ -132,7 +122,6 @@ def get_gif_id(direction):
 
 def send_brand(target, signal):
     gif = get_gif_id(signal["direction"])
-
     bot.send_animation(
         target,
         gif,
@@ -143,6 +132,32 @@ def send_brand(target, signal):
 
 def send_text(target, text):
     bot.send_message(target, text, parse_mode="HTML", disable_web_page_preview=True)
+
+
+def keyboard(sent_count=0):
+    m = InlineKeyboardMarkup()
+
+    if sent_count == 0:
+        m.row(
+            InlineKeyboardButton("🔓 Public", callback_data="public"),
+            InlineKeyboardButton("💎 VIP", callback_data="vip")
+        )
+        m.row(InlineKeyboardButton("🌍 Both", callback_data="both"))
+
+    elif sent_count == 1:
+        m.row(
+            InlineKeyboardButton("🔓 Public", callback_data="public"),
+            InlineKeyboardButton("💎 VIP", callback_data="vip")
+        )
+        m.row(
+            InlineKeyboardButton("🌍 Both", callback_data="both"),
+            InlineKeyboardButton("✅ Done", callback_data="done")
+        )
+
+    else:
+        m.row(InlineKeyboardButton("✅ Done", callback_data="done"))
+
+    return m
 
 
 @bot.message_handler(commands=["start"])
@@ -217,12 +232,15 @@ def handle(message):
     text = message.text.strip().lower()
 
     if text == "ayd":
-        pending[message.chat.id] = {"mode": "ayd"}
+        pending[message.chat.id] = {
+            "mode": "ayd",
+            "sent_count": 0
+        }
 
         bot.send_message(
             message.chat.id,
             "AYD 已生成，请选择发送范围：\n\n" + ayd_main(),
-            reply_markup=keyboard(),
+            reply_markup=keyboard(0),
             parse_mode="HTML"
         )
         return
@@ -238,13 +256,14 @@ def handle(message):
 
     pending[message.chat.id] = {
         "mode": "signal",
-        "signal": signal
+        "signal": signal,
+        "sent_count": 0
     }
 
     bot.send_message(
         message.chat.id,
         "信号已生成，请选择发送范围：\n\n" + build_brand(signal),
-        reply_markup=keyboard(),
+        reply_markup=keyboard(0),
         parse_mode="HTML",
         disable_web_page_preview=True
     )
@@ -263,6 +282,20 @@ def cb(call):
         return
 
     mode = state["mode"]
+    sent_count = state.get("sent_count", 0)
+
+    if call.data == "done":
+        pending.pop(call.message.chat.id, None)
+        bot.send_message(call.message.chat.id, "✅ 已完成。这条指令已结束。")
+        return
+
+    if sent_count >= 2:
+        bot.send_message(
+            call.message.chat.id,
+            "⚠️ 已达到最多选择次数，请点击 Done。",
+            reply_markup=keyboard(2)
+        )
+        return
 
     try:
         if mode == "ayd":
@@ -277,7 +310,7 @@ def cb(call):
                     if isinstance(ch, str):
                         send_text(ch, ayd_sub2())
 
-                bot.send_message(call.message.chat.id, "AYD 已发送到 Public ✅")
+                result_text = "AYD 已发送到 Public ✅"
 
             elif call.data == "vip":
                 send_text(VIP_CHANNEL, ayd_main())
@@ -290,7 +323,7 @@ def cb(call):
                     if isinstance(ch, int):
                         send_text(ch, ayd_sub2())
 
-                bot.send_message(call.message.chat.id, "AYD 已发送到 VIP ✅")
+                result_text = "AYD 已发送到 VIP ✅"
 
             elif call.data == "both":
                 send_text(PUBLIC_CHANNEL, ayd_main())
@@ -302,7 +335,10 @@ def cb(call):
                 for ch in SUB2_TARGETS:
                     send_text(ch, ayd_sub2())
 
-                bot.send_message(call.message.chat.id, "AYD 已发送到 Public + VIP ✅")
+                result_text = "AYD 已发送到 Public + VIP ✅"
+
+            else:
+                return
 
         elif mode == "signal":
             s = state["signal"]
@@ -318,7 +354,7 @@ def cb(call):
                     if isinstance(ch, str):
                         send_text(ch, build_sub2(s))
 
-                bot.send_message(call.message.chat.id, "信号已发送到 Public ✅")
+                result_text = "信号已发送到 Public ✅"
 
             elif call.data == "vip":
                 send_brand(VIP_CHANNEL, s)
@@ -331,7 +367,7 @@ def cb(call):
                     if isinstance(ch, int):
                         send_text(ch, build_sub2(s))
 
-                bot.send_message(call.message.chat.id, "信号已发送到 VIP ✅")
+                result_text = "信号已发送到 VIP ✅"
 
             elif call.data == "both":
                 send_brand(PUBLIC_CHANNEL, s)
@@ -343,7 +379,28 @@ def cb(call):
                 for ch in SUB2_TARGETS:
                     send_text(ch, build_sub2(s))
 
-                bot.send_message(call.message.chat.id, "信号已发送到 Public + VIP ✅")
+                result_text = "信号已发送到 Public + VIP ✅"
+
+            else:
+                return
+
+        else:
+            return
+
+        state["sent_count"] = sent_count + 1
+
+        if state["sent_count"] >= 2:
+            bot.send_message(
+                call.message.chat.id,
+                result_text + "\n\n已达到最多选择次数，请点击 Done。",
+                reply_markup=keyboard(2)
+            )
+        else:
+            bot.send_message(
+                call.message.chat.id,
+                result_text + "\n\n是否还要发送到其他地方？",
+                reply_markup=keyboard(1)
+            )
 
     except Exception as e:
         bot.send_message(call.message.chat.id, f"❌ 发送失败：{e}")

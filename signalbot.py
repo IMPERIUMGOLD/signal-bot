@@ -76,7 +76,7 @@ def build_sub1(signal):
 <b>TP 1 : 50pips</b>
 <b>TP 2 : {signal['p2']}</b>
 
-<b>Stop Loss : {signal['sl']}</b> (Candle Close)"""
+<b>Stop Loss : {signal['sl']}</b> (M1 break)"""
 
 
 def build_sub2(signal):

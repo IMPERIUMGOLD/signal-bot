@@ -23,28 +23,23 @@ SUB2_TARGETS = [
     -1003725353677
 ]
 
-# ===== SL 调整（以后你改这里就行）=====
 SL_OFFSET = 2
-
 GIF_FILE = "gif_ids.json"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 pending = {}
 
+# ===== 工具 =====
 def load_gifs():
     if os.path.exists(GIF_FILE):
         with open(GIF_FILE, "r") as f:
             return json.load(f)
     return {"buy": None, "sell": None}
 
-def save_gifs(data):
-    with open(GIF_FILE, "w") as f:
-        json.dump(data, f)
-
 gif_ids = load_gifs()
 
-# ===== 解析信号 =====
+# ===== 解析 =====
 def parse_signal(text):
     pattern = r"^(B|S)\s+(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sl\s+(\d+(?:\.\d+)?)\s+p2\s+(\d+(?:\.\d+)?)$"
     m = re.match(pattern, text.strip(), re.IGNORECASE)
@@ -58,8 +53,8 @@ def parse_signal(text):
         "p2": p2
     }
 
-# ===== 主群模板 =====
-def build_brand_caption(signal):
+# ===== 主模板 =====
+def build_brand(signal):
     emoji = "📈" if signal["direction"]=="BUY" else "📉"
     return f"""<b>{emoji} GOLD {signal['direction']} NOW 🔥</b>
 
@@ -73,10 +68,10 @@ TP 2 : <b>{signal['p2']}</b>
 Way to Follow Signal : <b><a href="{FOLLOW_LINK}">Click</a></b> ‼️
 
 DISCLAIMER ⚠️
-Signals are shared for reference only. This is general information, not financial advice. Please decide independently."""
+Signals are shared for reference only. This is general information, not financial advice."""
 
 # ===== Sub1 =====
-def build_sub1(signal):
+def sub1(signal):
     return f"""<b>XAUUSD {signal['direction']} : {signal['entry']}</b>
 
 <b>TP 1 : 50pips</b>
@@ -85,7 +80,7 @@ def build_sub1(signal):
 <b>Stop Loss : {signal['sl']}</b> (Candle Close)"""
 
 # ===== Sub2 =====
-def build_sub2(signal):
+def sub2(signal):
     if signal["direction"]=="BUY":
         sl = signal["sl"] - SL_OFFSET
         emoji = "📈"
@@ -104,25 +99,20 @@ def build_sub2(signal):
 <b>Stop Loss : {sl} ‼️</b>"""
 
 # ===== AYD =====
-def ayd_main():
-    return "<b>ARE YOU READY?</b> 🔥🔥🔥"
-
-def ayd_sub1():
-    return "<b>Are You Ready ?</b>"
-
-def ayd_sub2():
-    return "<b>Are You Ready Everyone!!</b>"
+def ayd_main(): return "<b>ARE YOU READY?</b> 🔥🔥🔥"
+def ayd_sub1(): return "<b>Are You Ready ?</b>"
+def ayd_sub2(): return "<b>Are You Ready Everyone!!</b>"
 
 # ===== 发送 =====
 def send_brand(target, signal):
     gif = gif_ids["buy"] if signal["direction"]=="BUY" else gif_ids["sell"]
-    bot.send_animation(target, gif, caption=build_brand_caption(signal), parse_mode="HTML")
+    bot.send_animation(target, gif, caption=build_brand(signal), parse_mode="HTML")
 
 def send_text(target, text):
     bot.send_message(target, text, parse_mode="HTML")
 
 # ===== 按钮 =====
-def make_keyboard():
+def keyboard():
     m = InlineKeyboardMarkup()
     m.row(
         InlineKeyboardButton("🔓 Public", callback_data="public"),
@@ -131,17 +121,15 @@ def make_keyboard():
     m.row(InlineKeyboardButton("🌍 Both", callback_data="both"))
     return m
 
-# ===== 主处理 =====
+# ===== 主逻辑 =====
 @bot.message_handler(func=lambda m: True)
 def handle(message):
     if message.from_user.id != OWNER_ID:
         return
 
-    text = message.text.lower()
-
-    if text == "ayd":
+    if message.text.lower() == "ayd":
         pending[message.chat.id] = {"mode":"ayd"}
-        bot.send_message(message.chat.id, "选择发送范围", reply_markup=make_keyboard())
+        bot.send_message(message.chat.id, "选择发送范围", reply_markup=keyboard())
         return
 
     signal = parse_signal(message.text)
@@ -149,40 +137,83 @@ def handle(message):
         return
 
     pending[message.chat.id] = {"mode":"signal","signal":signal}
-    bot.send_message(message.chat.id, "选择发送范围", reply_markup=make_keyboard())
+    bot.send_message(message.chat.id, "选择发送范围", reply_markup=keyboard())
 
-# ===== callback =====
+# ===== 回调 =====
 @bot.callback_query_handler(func=lambda call: True)
 def cb(call):
+    bot.answer_callback_query(call.id)  # ✅ 防卡
+
     state = pending.get(call.message.chat.id)
     if not state:
         return
 
     mode = state["mode"]
 
+    # ===== AYD =====
     if mode=="ayd":
-        if call.data in ["public","both"]:
+
+        if call.data == "public":
             send_text(PUBLIC_CHANNEL, ayd_main())
-        if call.data in ["vip","both"]:
+
+            for ch in SUB1_TARGETS:
+                if isinstance(ch,str):
+                    send_text(ch, ayd_sub1())
+            for ch in SUB2_TARGETS:
+                if isinstance(ch,str):
+                    send_text(ch, ayd_sub2())
+
+        elif call.data == "vip":
             send_text(VIP_CHANNEL, ayd_main())
 
-        for ch in SUB1_TARGETS:
-            send_text(ch, ayd_sub1())
-        for ch in SUB2_TARGETS:
-            send_text(ch, ayd_sub2())
+            for ch in SUB1_TARGETS:
+                if isinstance(ch,int):
+                    send_text(ch, ayd_sub1())
+            for ch in SUB2_TARGETS:
+                if isinstance(ch,int):
+                    send_text(ch, ayd_sub2())
 
+        elif call.data == "both":
+            send_text(PUBLIC_CHANNEL, ayd_main())
+            send_text(VIP_CHANNEL, ayd_main())
+
+            for ch in SUB1_TARGETS:
+                send_text(ch, ayd_sub1())
+            for ch in SUB2_TARGETS:
+                send_text(ch, ayd_sub2())
+
+    # ===== SIGNAL =====
     else:
         s = state["signal"]
 
-        if call.data in ["public","both"]:
+        if call.data == "public":
             send_brand(PUBLIC_CHANNEL, s)
-        if call.data in ["vip","both"]:
+
+            for ch in SUB1_TARGETS:
+                if isinstance(ch,str):
+                    send_text(ch, sub1(s))
+            for ch in SUB2_TARGETS:
+                if isinstance(ch,str):
+                    send_text(ch, sub2(s))
+
+        elif call.data == "vip":
             send_brand(VIP_CHANNEL, s)
 
-        for ch in SUB1_TARGETS:
-            send_text(ch, build_sub1(s))
-        for ch in SUB2_TARGETS:
-            send_text(ch, build_sub2(s))
+            for ch in SUB1_TARGETS:
+                if isinstance(ch,int):
+                    send_text(ch, sub1(s))
+            for ch in SUB2_TARGETS:
+                if isinstance(ch,int):
+                    send_text(ch, sub2(s))
+
+        elif call.data == "both":
+            send_brand(PUBLIC_CHANNEL, s)
+            send_brand(VIP_CHANNEL, s)
+
+            for ch in SUB1_TARGETS:
+                send_text(ch, sub1(s))
+            for ch in SUB2_TARGETS:
+                send_text(ch, sub2(s))
 
 @app.route("/", methods=["GET"])
 def home():
